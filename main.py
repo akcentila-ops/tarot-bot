@@ -1,3 +1,5 @@
+print("TELEGRAM_TOKEN:", TELEGRAM_TOKEN)
+print("DEEPSEEK_API_KEY:", DEEPSEEK_API_KEY)
 import random
 import requests
 from telegram import Update, ReplyKeyboardMarkup
