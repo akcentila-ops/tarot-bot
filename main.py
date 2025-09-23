@@ -4,147 +4,119 @@ import random
 import requests
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from flask import Flask
-import threading
-import time
 
 # === НАСТРОЙКИ ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
+print("=== 🔮 Tarot Bot ===")
 print("TELEGRAM_TOKEN:", "ЕСТЬ" if TELEGRAM_TOKEN else "НЕТ")
 print("DEEPSEEK_API_KEY:", "ЕСТЬ" if DEEPSEEK_API_KEY else "НЕТ")
 
 # === КАРТЫ ТАРО ===
 TAROT_CARDS = [
-    "The Fool", "The Magician", "The High Priestess", "The Empress", "The Emperor",
-    "The Hierophant", "The Lovers", "The Chariot", "Strength", "The Hermit",
-    "Wheel of Fortune", "Justice", "The Hanged Man", "Death", "Temperance",
-    "The Devil", "The Tower", "The Star", "The Moon", "The Sun",
-    "Judgement", "The World",
-    "Ace of Cups", "Two of Cups", "Three of Cups", "Four of Cups", "Five of Cups",
-    "Six of Cups", "Seven of Cups", "Eight of Cups", "Nine of Cups", "Ten of Cups",
-    "Page of Cups", "Knight of Cups", "Queen of Cups", "King of Cups",
-    "Ace of Pentacles", "Two of Pentacles", "Three of Pentacles", "Four of Pentacles", "Five of Pentacles",
-    "Six of Pentacles", "Seven of Pentacles", "Eight of Pentacles", "Nine of Pentacles", "Ten of Pentacles",
-    "Page of Pentacles", "Knight of Pentacles", "Queen of Pentacles", "King of Pentacles",
-    "Ace of Swords", "Two of Swords", "Three of Swords", "Four of Swords", "Five of Swords",
-    "Six of Swords", "Seven of Swords", "Eight of Swords", "Nine of Swords", "Ten of Swords",
-    "Page of Swords", "Knight of Swords", "Queen of Swords", "King of Swords",
-    "Ace of Wands", "Two of Wands", "Three of Wands", "Four of Wands", "Five of Wands",
-    "Six of Wands", "Seven of Wands", "Eight of Wands", "Nine of Wands", "Ten of Wands",
-    "Page of Wands", "Knight of Wands", "Queen of Wands", "King of Wands"
+    "Шут", "Маг", "Верховная Жрица", "Императрица", "Император",
+    "Иерофант", "Влюбленные", "Колесница", "Сила", "Отшельник",
+    "Колесо Фортуны", "Справедливость", "Повешенный", "Смерть", "Умеренность",
+    "Дьявол", "Башня", "Звезда", "Луна", "Солнце",
+    "Суд", "Мир"
 ]
 
 # === КЛАВИАТУРА ===
 keyboard = [["🔮 На сегодня", "🃏 На неделю"], ["📅 На месяц"]]
 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# === ПРОСТОЙ ВЕБ-СЕРВЕР ДЛЯ RENDER ===
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "🔮 Tarot Bot is running!"
-
-@app.route('/health')
-def health():
-    return "OK"
-
-def run_flask():
-    """Запуск Flask в отдельном потоке"""
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
 # === ФУНКЦИИ БОТА ===
-async def cleanup_before_start():
-    """Очищаем состояние бота перед запуском"""
-    from telegram import Bot
-    bot = Bot(TELEGRAM_TOKEN)
-    await bot.delete_webhook(drop_pending_updates=True)
-    print("✅ Bot state cleaned up successfully")
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("📨 Получена команда /start")
     await update.message.reply_text(
-        "👋 Привет, искатель истины! Я — *Tarot Wisdom Bot*.\n\n"
-        "Я помогу тебе заглянуть в будущее с помощью карт Таро.\n\n"
+        "👋 Привет! Я — Tarot Wisdom Bot!\n\n"
         "Выбери расклад:", 
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
+        reply_markup=reply_markup
     )
+    print("✅ Клавиатура отправлена")
 
 def get_cards(count):
-    return random.sample(TAROT_CARDS, min(count, len(TAROT_CARDS)))
+    return random.sample(TAROT_CARDS, count)
 
 def interpret_card(card_name, spread_type):
-    prompt = f"Объясни значение карты Таро '{card_name}' в контексте расклада на {spread_type}. Ответь на русском языке, мягко, с элементами мистики, но без жестких формулировок. Не более 100 слов."
-    
     try:
+        prompt = f"Объясни значение карты Таро '{card_name}' для {spread_type} на русском (2-3 предложения)"
+        
         response = requests.post(
             url="https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
             json={
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 300
-            }
+                "max_tokens": 200
+            },
+            timeout=15
         )
-        data = response.json()
-        return data['choices'][0]['message']['content']
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data['choices'][0]['message']['content']
+        else:
+            return f"Карта {card_name} советует доверять своей интуиции."
+            
     except Exception as e:
-        return f"✨ Карта '{card_name}' говорит: доверься интуиции. Всё идёт по плану."
+        return f"✨ {card_name} говорит: всё идет своим чередом."
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    print(f"📨 Получено сообщение: {text}")
     
     if text == "🔮 На сегодня":
         card = get_cards(1)[0]
-        interpretation = interpret_card(card, "день")
+        interpretation = interpret_card(card, "сегодняшнего дня")
         await update.message.reply_text(f"*Карта дня:* **{card}**\n\n{interpretation}", parse_mode='Markdown')
+        print(f"✅ Отправлена карта дня: {card}")
         
     elif text == "🃏 На неделю":
         cards = get_cards(3)
-        result = "*Расклад на неделю:*\n\n"
-        for card in cards:
-            interpretation = interpret_card(card, "неделю")
-            result += f"**{card}**\n{interpretation}\n\n"
-        await update.message.reply_text(result, parse_mode='Markdown')
+        response = "*Твой расклад на неделю:*\n\n"
+        for i, card in enumerate(cards, 1):
+            interpretation = interpret_card(card, "предстоящей недели")
+            response += f"{i}. **{card}**\n{interpretation}\n\n"
+        await update.message.reply_text(response, parse_mode='Markdown')
+        print("✅ Отправлен расклад на неделю")
         
     elif text == "📅 На месяц":
         cards = get_cards(5)
-        result = "*Расклад на месяц:*\n\n"
-        for card in cards:
-            interpretation = interpret_card(card, "месяц")
-            result += f"**{card}**\n{interpretation}\n\n"
-        await update.message.reply_text(result, parse_mode='Markdown')  # ← ИСПРАВЛЕНА СТРОКА!
+        response = "*Твой расклад на месяц:*\n\n"
+        for i, card in enumerate(cards, 1):
+            interpretation = interpret_card(card, "предстоящего месяца")
+            response += f"{i}. **{card}**\n{interpretation}\n\n"
+        await update.message.reply_text(response, parse_mode='Markdown')
+        print("✅ Отправлен расклад на месяц")
+        
+    else:
+        await update.message.reply_text("Используй кнопки ниже 👇")
+        print("❌ Неизвестная команда")
 
 async def main():
     """Основная функция бота"""
-    await cleanup_before_start()
-    
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("🔮 Tarot Bot запущен и слушает сообщения...")
-    await application.run_polling()
-
-def run_bot():
-    """Запуск бота"""
-    asyncio.run(main())
+    try:
+        print("🚀 Инициализация бота...")
+        
+        # Создаем приложение
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
+        
+        # Добавляем обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        
+        # Очищаем предыдущие состояния
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        print("✅ Вебхук очищен")
+        
+        print("🔮 Бот запущен и слушает сообщения...")
+        await application.run_polling()
+        
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
 
 if __name__ == '__main__':
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Даем Flask время запуститься
-    time.sleep(3)
-    
-    # Запускаем бота в основном потоке
-    print("🚀 Запускаем бота...")
-    run_bot()
+    # Простой запуск
+    asyncio.run(main())
