@@ -119,7 +119,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for card in cards:
             interpretation = interpret_card(card, "месяц")
             result += f"**{card}**\n{interpretation}\n\n"
-        await update.message.reply_text(result, parse_mode='Markdown())
+        await update.message.reply_text(result, parse_mode='Markdown')  # ← ИСПРАВЛЕНА СТРОКА!
 
 async def main():
     """Основная функция бота"""
