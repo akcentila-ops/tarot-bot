@@ -1,17 +1,21 @@
 import os
-import asyncio
+import logging
 import random
 import requests
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # === НАСТРОЙКИ ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-print("=== 🔮 Tarot Bot ===")
-print("TELEGRAM_TOKEN:", "ЕСТЬ" if TELEGRAM_TOKEN else "НЕТ")
-print("DEEPSEEK_API_KEY:", "ЕСТЬ" if DEEPSEEK_API_KEY else "НЕТ")
+logger.info("=== 🔮 Tarot Bot ===")
+logger.info("TELEGRAM_TOKEN: %s", "ЕСТЬ" if TELEGRAM_TOKEN else "НЕТ")
+logger.info("DEEPSEEK_API_KEY: %s", "ЕСТЬ" if DEEPSEEK_API_KEY else "НЕТ")
 
 # === КАРТЫ ТАРО ===
 TAROT_CARDS = [
@@ -28,13 +32,12 @@ reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # === ФУНКЦИИ БОТА ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("📨 Получена команда /start")
+    logger.info("Получена команда /start от пользователя %s", update.effective_user.id)
     await update.message.reply_text(
         "👋 Привет! Я — Tarot Wisdom Bot!\n\n"
         "Выбери расклад:", 
         reply_markup=reply_markup
     )
-    print("✅ Клавиатура отправлена")
 
 def get_cards(count):
     return random.sample(TAROT_CARDS, count)
@@ -61,17 +64,17 @@ def interpret_card(card_name, spread_type):
             return f"Карта {card_name} советует доверять своей интуиции."
             
     except Exception as e:
+        logger.error("Ошибка при интерпретации карты: %s", e)
         return f"✨ {card_name} говорит: всё идет своим чередом."
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    print(f"📨 Получено сообщение: {text}")
+    logger.info("Получено сообщение: %s", text)
     
     if text == "🔮 На сегодня":
         card = get_cards(1)[0]
         interpretation = interpret_card(card, "сегодняшнего дня")
         await update.message.reply_text(f"*Карта дня:* **{card}**\n\n{interpretation}", parse_mode='Markdown')
-        print(f"✅ Отправлена карта дня: {card}")
         
     elif text == "🃏 На неделю":
         cards = get_cards(3)
@@ -80,7 +83,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             interpretation = interpret_card(card, "предстоящей недели")
             response += f"{i}. **{card}**\n{interpretation}\n\n"
         await update.message.reply_text(response, parse_mode='Markdown')
-        print("✅ Отправлен расклад на неделю")
         
     elif text == "📅 На месяц":
         cards = get_cards(5)
@@ -89,16 +91,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             interpretation = interpret_card(card, "предстоящего месяца")
             response += f"{i}. **{card}**\n{interpretation}\n\n"
         await update.message.reply_text(response, parse_mode='Markdown')
-        print("✅ Отправлен расклад на месяц")
         
     else:
         await update.message.reply_text("Используй кнопки ниже 👇")
-        print("❌ Неизвестная команда")
 
-async def main():
-    """Основная функция бота"""
+def main():
+    """Основная функция запуска"""
     try:
-        print("🚀 Инициализация бота...")
+        logger.info("🚀 Запуск бота...")
         
         # Создаем приложение
         application = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -107,16 +107,12 @@ async def main():
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
-        # Очищаем предыдущие состояния
-        await application.bot.delete_webhook(drop_pending_updates=True)
-        print("✅ Вебхук очищен")
-        
-        print("🔮 Бот запущен и слушает сообщения...")
-        await application.run_polling()
+        # Запускаем бота
+        logger.info("🔮 Бот запущен и слушает сообщения...")
+        application.run_polling()
         
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        logger.error("Критическая ошибка: %s", e)
 
 if __name__ == '__main__':
-    # Простой запуск
-    asyncio.run(main())
+    main()
