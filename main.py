@@ -1,50 +1,18 @@
-python
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-
-async def post_init(application: Application) -> None:
-    """Очищаем предыдущие updates при запуске"""
-    await application.bot.delete_webhook(drop_pending_updates=True)
-    print("✅ Webhook deleted and pending updates cleared")
-
-# В основном коде при инициализации:
-application = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
 import os
+import asyncio
+import random
+import requests
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from flask import Flask, request
 import threading
-from flask import Flask
 
-# Создаем простой веб-сервер для Render
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-def run_web():
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-# Запускаем веб-сервер в отдельном потоке
-if __name__ == "__main__":
-    web_thread = threading.Thread(target=run_web)
-    web_thread.daemon = True
-    web_thread.start()
-import os
+# === НАСТРОЙКИ ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 print("TELEGRAM_TOKEN:", "ЕСТЬ" if TELEGRAM_TOKEN else "НЕТ")
 print("DEEPSEEK_API_KEY:", "ЕСТЬ" if DEEPSEEK_API_KEY else "НЕТ")
-print("DEEPSEEK_API_KEY:", DEEPSEEK_API_KEY)
-import random
-import requests
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-# === КЛЮЧИ БУДУТ В RAILWAY (не здесь!) ===
-import os
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 # === КАРТЫ ТАРО ===
 TAROT_CARDS = [
@@ -71,7 +39,26 @@ TAROT_CARDS = [
 keyboard = [["🔮 На сегодня", "🃏 На неделю"], ["📅 На месяц"]]
 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# === /start ===
+# === Flask для Render ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🔮 Tarot Bot is running!"
+
+def run_web():
+    """Запуск веб-сервера для Render"""
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# === ФУНКЦИИ БОТА ===
+async def cleanup_before_start():
+    """Очищаем состояние бота перед запуском"""
+    from telegram import Bot
+    bot = Bot(TELEGRAM_TOKEN)
+    await bot.delete_webhook(drop_pending_updates=True)
+    print("✅ Bot state cleaned up successfully")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привет, искатель истины! Я — *Tarot Wisdom Bot*.\n\n"
@@ -81,11 +68,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# === Генерация случайных карт ===
 def get_cards(count):
     return random.sample(TAROT_CARDS, min(count, len(TAROT_CARDS)))
 
-# === Запрос к DeepSeek для интерпретации ===
 def interpret_card(card_name, spread_type):
     prompt = f"Объясни значение карты Таро '{card_name}' в контексте расклада на {spread_type}. Ответь на русском языке, мягко, с элементами мистики, но без жестких формулировок. Не более 100 слов."
     
@@ -107,7 +92,6 @@ def interpret_card(card_name, spread_type):
     except Exception as e:
         return f"✨ Карта '{card_name}' говорит: доверься интуиции. Всё идёт по плану."
 
-# === Обработка сообщений ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
@@ -132,13 +116,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result += f"**{card}**\n{interpretation}\n\n"
         await update.message.reply_text(result, parse_mode='Markdown')
 
-# === Запуск бота ===
-def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+async def main():
+    """Основная функция запуска бота"""
+    # Очищаем перед запуском
+    await cleanup_before_start()
+    
+    # Создаем приложение бота
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Добавляем обработчики
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
     print("🔮 Tarot Bot запущен и слушает сообщения...")
-    app.run_polling()
+    await application.run_polling()
+
+def run_bot():
+    """Запуск бота в asyncio loop"""
+    asyncio.run(main())
 
 if __name__ == '__main__':
-    main()
+    # Запускаем веб-сервер в отдельном потоке
+    web_thread = threading.Thread(target=run_web)
+    web_thread.daemon = True
+    web_thread.start()
+    
+    # Запускаем бота
+    run_bot()
