@@ -1,4 +1,9 @@
-print("TELEGRAM_TOKEN:", TELEGRAM_TOKEN)
+import os
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+print("TELEGRAM_TOKEN:", "ЕСТЬ" if TELEGRAM_TOKEN else "НЕТ")
+print("DEEPSEEK_API_KEY:", "ЕСТЬ" if DEEPSEEK_API_KEY else "НЕТ")
 print("DEEPSEEK_API_KEY:", DEEPSEEK_API_KEY)
 import random
 import requests
