@@ -1,3 +1,14 @@
+python
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+
+async def post_init(application: Application) -> None:
+    """Очищаем предыдущие updates при запуске"""
+    await application.bot.delete_webhook(drop_pending_updates=True)
+    print("✅ Webhook deleted and pending updates cleared")
+
+# В основном коде при инициализации:
+application = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
 import os
 import threading
 from flask import Flask
