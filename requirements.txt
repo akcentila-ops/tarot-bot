@@ -4,3 +4,4 @@ urllib3==2.1.0
 idna==3.4
 certifi==2025.8.3
 charset-normalizer==3.4.3
+imghdr==0.0.1
