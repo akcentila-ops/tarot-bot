@@ -6,6 +6,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from flask import Flask
 import threading
+import time
 
 # === НАСТРОЙКИ ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -46,8 +47,12 @@ app = Flask(__name__)
 def home():
     return "🔮 Tarot Bot is running!"
 
-def run_web():
-    """Запуск веб-сервера в отдельном процессе"""
+@app.route('/health')
+def health():
+    return "OK"
+
+def run_flask():
+    """Запуск Flask в отдельном потоке"""
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
@@ -114,32 +119,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for card in cards:
             interpretation = interpret_card(card, "месяц")
             result += f"**{card}**\n{interpretation}\n\n"
-        await update.message.reply_text(result, parse_mode='Markdown')
+        await update.message.reply_text(result, parse_mode='Markdown())
+
+async def main():
+    """Основная функция бота"""
+    await cleanup_before_start()
+    
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    print("🔮 Tarot Bot запущен и слушает сообщения...")
+    await application.run_polling()
 
 def run_bot():
-    """Запуск бота в отдельном потоке"""
-    async def main():
-        await cleanup_before_start()
-        
-        application = Application.builder().token(TELEGRAM_TOKEN).build()
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        
-        print("🔮 Tarot Bot запущен и слушает сообщения...")
-        await application.run_polling()
-    
-    # Создаем новый event loop для бота
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(main())
+    """Запуск бота"""
+    asyncio.run(main())
 
 if __name__ == '__main__':
-    # Запускаем веб-сервер в основном потоке
-    # Запускаем бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+    # Запускаем Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
     
-    # Запускаем Flask в основном потоке
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    # Даем Flask время запуститься
+    time.sleep(3)
+    
+    # Запускаем бота в основном потоке
+    print("🚀 Запускаем бота...")
+    run_bot()
